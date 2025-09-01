@@ -20,8 +20,8 @@ if(${ENABLE_TRANSFORM})
   add_definitions("-DENABLE_TRANSFORM")
 endif(${ENABLE_TRANSFORM})
 
-set(vanjee_driver_INCLUDE_DIRS "/home/vanjee/Apollo/apollo_vanjee_driver/driver_without_source_code/vanjee_install/src;/usr/include")
-set(VANJEE_DRIVER_INCLUDE_DIRS "/home/vanjee/Apollo/apollo_vanjee_driver/driver_without_source_code/vanjee_install/src;/usr/include")
+set(vanjee_driver_INCLUDE_DIRS "/home/vanjee/Apollo_back/apollo_vanjee_driver/driver_without_source_code/vanjee_install/src;/usr/locol/include")
+set(VANJEE_DRIVER_INCLUDE_DIRS "/home/vanjee/Apollo_back/apollo_vanjee_driver/driver_without_source_code/vanjee_install/src;/usr/locol/include")
 
 set(vanjee_driver_LIBRARIES "pthread")
 set(VANJEE_DRIVER_LIBRARIES "pthread")

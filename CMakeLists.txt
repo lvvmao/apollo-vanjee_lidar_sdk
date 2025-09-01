@@ -60,7 +60,7 @@ message(=============================================================)
 #========================
 #  Path Setup
 #========================
-set(CMAKE_INSTALL_PREFIX /usr/include)
+set(CMAKE_INSTALL_PREFIX /usr/local/include)
 set(INSTALL_DRIVER_DIR ${CMAKE_INSTALL_PREFIX})
 set(INSTALL_CMAKE_DIR ${CMAKE_INSTALL_PREFIX}/lib/cmake)
 set(DRIVER_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/src)
