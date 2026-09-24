@@ -106,7 +106,7 @@ class CheckClass {
         0x5bfc, 0xe6cf, 0x94c7, 0x29f4, 0x70d7, 0xcde4, 0xbfec, 0x02df, 0x0daa, 0xb099, 0xc291, 0x7fa2, 0x2681, 0x9bb2, 0xe9ba, 0x5489,
         0xf750, 0x4a63, 0x386b, 0x8558, 0xdc7b, 0x6148, 0x1340, 0xae73, 0xa106, 0x1c35, 0x6e3d, 0xd30e, 0x8a2d, 0x371e, 0x4516, 0xf825};
     uint16_t crc16 = 0x00;
-    for (int i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++) {
       uint8_t tblIndex = (uint8_t)((crc16 ^ buf[start + i]) & 0xff);
       crc16 = (uint16_t)(crctab_719e[tblIndex] ^ (crc16 >> 8));
     }
@@ -144,7 +144,8 @@ class ProtocolBase {
 
  public:
   ProtocolBase(uint16 idx, uint32 timestamp, uint8 checkType, uint8 type, const ByteVector &deviceType, const ByteVector &remain, uint8 mainCmd,
-               uint8 subCmd, const ByteVector &cmdParams, const ByteVector &content, uint8_t byte_order = DataEndiannessMode::big_endian) {
+               uint8 subCmd, const ByteVector &cmdParams, const ByteVector &content, uint8_t byte_order = DataEndiannessMode::big_endian,
+               uint16 head = 0xFFAA) {
     ByteOrder = byte_order;
     if (ByteOrder == DataEndiannessMode::big_endian) {
       Idx[0] = (idx >> 8) & 0xFF;
@@ -172,11 +173,13 @@ class ProtocolBase {
     SubCmd = subCmd;
     CmdParams = cmdParams;
     Content = content;
+    Head[0] = (uint8_t)((head >> 8) & 0xFF);
+    Head[1] = (uint8_t)(head & 0xFF);
   }
 
   ProtocolBase(const ByteVector &idx, const ByteVector &timestamp, uint8 checkType, uint8 type, ByteVector &deviceType, ByteVector &remain,
                uint8 mainCmd, uint8 subCmd, const ByteVector &cmdParams, const ByteVector &content,
-               uint8_t byte_order = DataEndiannessMode::big_endian) {
+               uint8_t byte_order = DataEndiannessMode::big_endian, uint16 head = 0xFFAA) {
     ByteOrder = byte_order;
     Idx = idx;
     Timestamp = timestamp;
@@ -188,10 +191,12 @@ class ProtocolBase {
     SubCmd = subCmd;
     CmdParams = cmdParams;
     Content = content;
+    Head[0] = (uint8_t)((head >> 8) & 0xFF);
+    Head[1] = (uint8_t)(head & 0xFF);
   }
 
   ProtocolBase(uint8 checkType, uint8 type, ByteVector &deviceType, uint8 mainCmd, uint8 subCmd, const ByteVector &content,
-               uint8_t byte_order = DataEndiannessMode::big_endian) {
+               uint8_t byte_order = DataEndiannessMode::big_endian, uint16 head = 0xFFAA) {
     ByteOrder = byte_order;
     CheckType = checkType;
     Type = type;
@@ -203,6 +208,8 @@ class ProtocolBase {
     MainCmd = mainCmd;
     SubCmd = subCmd;
     Content = content;
+    Head[0] = (uint8_t)((head >> 8) & 0xFF);
+    Head[1] = (uint8_t)(head & 0xFF);
   }
 
   ProtocolBase(uint8_t byte_order = DataEndiannessMode::big_endian) {
@@ -534,6 +541,15 @@ class ProtocolBase {
     pb->Config = Config;
 
     return pb;
+  }
+
+  void SetHeader(uint16_t head) {
+    Head[0] = (uint8_t)((head >> 8) & 0xff);
+    Head[1] = (uint8_t)(head & 0xff);
+  }
+
+  uint16_t GetHeader() {
+    return (uint16_t)(Head[0] << 8 | Head[1]);
   }
 
   void SetByteOrder(uint8_t byte_order) {

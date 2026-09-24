@@ -49,6 +49,8 @@ class CmdRepository720 {
   const std::shared_ptr<CmdClass> sp_imu_add_param_get_ = std::make_shared<CmdClass>(0x06, 0x14);
   const std::shared_ptr<CmdClass> sp_temperature_param_get_ = std::make_shared<CmdClass>(0x04, 0x02);
   const std::shared_ptr<CmdClass> sp_ld_eccentricity_param_get_ = std::make_shared<CmdClass>(0x05, 0x1a);
+  const std::shared_ptr<CmdClass> sp_sn_param_get_ = std::make_shared<CmdClass>(0x05, 0x10);
+
   static CmdRepository720* CreateInstance() {
     if (p_CmdRepository720 == nullptr)
       p_CmdRepository720 = new CmdRepository720();

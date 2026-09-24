@@ -60,7 +60,7 @@ class DecoderPacketGeneralVersionV1_1 : public DecoderPacketGeneralVersionBase<T
                              std::function<void(DataBlockAngleAndTimestampInfo&, T_DataBlock*)> update_angle_and_timestamp_info_callback,
                              std::function<void(T_DataUnit*, PointInfo&)> decoder_data_unit_callback,
                              std::function<void()> point_cloud_algorithm_callback) {
-    VanjeeLidarPointCloudPacketBaseHeader& vanjee_lidar_point_cloud_packet_base_header = *(VanjeeLidarPointCloudPacketBaseHeader*)buf;
+    // VanjeeLidarPointCloudPacketBaseHeader& vanjee_lidar_point_cloud_packet_base_header = *(VanjeeLidarPointCloudPacketBaseHeader*)buf;
     return decoderPointCloudPacketProtocolVersionV1_1(buf, size, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
                                                       point_cloud_algorithm_callback);
   }
@@ -85,7 +85,9 @@ class DecoderPacketGeneralVersionV1_1 : public DecoderPacketGeneralVersionBase<T
       pkt_ts = lidar_pkt_ts < 0 ? 0 : lidar_pkt_ts;
     }
 
-    functionalSafetyDecoder(buf, size, vanjee_lidar_point_cloud_packet_header);
+    if (this->decoder_ptr_->param_.device_ctrl_state_enable || this->decoder_ptr_->param_.send_lidar_param_enable) {
+      functionalSafetyDecoder(buf, size, vanjee_lidar_point_cloud_packet_header);
+    }
     if (this->decoder_ptr_->param_.imu_enable != -1) {
       sendImuData(buf, size, pkt_ts, lidar_pkt_ts, vanjee_lidar_point_cloud_packet_header);
       if (!this->decoder_ptr_->imu_ready_ && !this->decoder_ptr_->point_cloud_ready_) {
@@ -111,7 +113,12 @@ class DecoderPacketGeneralVersionV1_1 : public DecoderPacketGeneralVersionBase<T
         if (point_cloud_algorithm_callback != nullptr)
           point_cloud_algorithm_callback();
         this->transformPointCloud();
-        this->decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.row_channel_num_, this->decoder_ptr_->cloudTs());
+        if (vanjee_lidar_point_cloud_packet_header.data_block_info_.data_block_packet_type_ == 1 ||
+            vanjee_lidar_point_cloud_packet_header.data_block_info_.data_block_packet_type_ == 3) {
+          this->decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.row_channel_num_, this->decoder_ptr_->cloudTs());
+        } else {
+          this->decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.col_channel_num_, this->decoder_ptr_->cloudTs());
+        }
         ret = true;
       }
 
@@ -151,7 +158,12 @@ class DecoderPacketGeneralVersionV1_1 : public DecoderPacketGeneralVersionBase<T
         if (point_cloud_algorithm_callback != nullptr)
           point_cloud_algorithm_callback();
         this->transformPointCloud();
-        this->decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.row_channel_num_, this->decoder_ptr_->cloudTs());
+        if (vanjee_lidar_point_cloud_packet_header.data_block_info_.data_block_packet_type_ == 1 ||
+            vanjee_lidar_point_cloud_packet_header.data_block_info_.data_block_packet_type_ == 3) {
+          this->decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.row_channel_num_, this->decoder_ptr_->cloudTs());
+        } else {
+          this->decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.col_channel_num_, this->decoder_ptr_->cloudTs());
+        }
         ret = true;
       }
 
@@ -172,7 +184,7 @@ class DecoderPacketGeneralVersionV1_1 : public DecoderPacketGeneralVersionBase<T
     bool ret = true;
     // 0：exclude cyber security info field；1：include cyber security info field,but data is invalidate;
     // 2:include cyber security info field ,and data is valid;
-    uint8_t cyber_security_flag = (vanjee_lidar_point_cloud_packet_header.info_flag_ >> 4) & 0x03;
+    // uint8_t cyber_security_flag = (vanjee_lidar_point_cloud_packet_header.info_flag_ >> 4) & 0x03;
     // 0：exclude check info field；1：include check info field,but data is invalidate;
     // 2：crc16;3：bcc,4：crc32,5：crc64;
     uint8_t check_flag = (vanjee_lidar_point_cloud_packet_header.info_flag_ >> 6) & 0x0f;
@@ -238,7 +250,7 @@ class DecoderPacketGeneralVersionV1_1 : public DecoderPacketGeneralVersionBase<T
       }
       this->fault_detection_module_counter_ = functionSafetyInfo.fault_detection_module_counter_;
 
-      if (this->decoder_ptr_->param_.device_ctrl_state_enable && functionSafetyInfo.error_code_id_ != 0) {
+      if (functionSafetyInfo.error_code_id_ != 0) {
         this->decoder_ptr_->deviceStatePublish(id, lidar_state, lidar_state, this->first_point_ts_);
       }
     }
@@ -274,9 +286,9 @@ class DecoderPacketGeneralVersionV1_1 : public DecoderPacketGeneralVersionBase<T
       ImuDataInfo& imuDataInfo = *(ImuDataInfo*)(buf + size - offset);
       double imu_timestamp = lidar_timestamp + (double)imuDataInfo.imu_data_timestamp_ * 1e-9;
       if (abs(imu_timestamp - this->pre_imu_timestamp_) > 1e-6) {
-        this->decoder_ptr_->imu_ready_ = this->imu_params_get_->imuGet(imuDataInfo.imu_angle_voc_x_, imuDataInfo.imu_angle_voc_y_, imuDataInfo.imu_angle_voc_z_,
-                                                 imuDataInfo.imu_linear_acce_x_, imuDataInfo.imu_linear_acce_y_, imuDataInfo.imu_linear_acce_z_,
-                                                 imu_timestamp, -100.0, false, false, false, true, true);
+        this->decoder_ptr_->imu_ready_ = this->imu_params_get_->imuGet(
+            imuDataInfo.imu_angle_voc_x_, imuDataInfo.imu_angle_voc_y_, imuDataInfo.imu_angle_voc_z_, imuDataInfo.imu_linear_acce_x_,
+            imuDataInfo.imu_linear_acce_y_, imuDataInfo.imu_linear_acce_z_, imu_timestamp, -100.0, false, false, false, true, true);
         if (this->decoder_ptr_->imu_ready_) {
           this->decoder_ptr_->imu_packet_->timestamp = timestamp + (double)imuDataInfo.imu_data_timestamp_ * 1e-9;
           this->decoder_ptr_->imu_packet_->angular_voc[0] = this->imu_params_get_->imu_result_stu_.x_angle;

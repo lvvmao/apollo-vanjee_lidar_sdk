@@ -47,15 +47,41 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace vanjee {
 namespace lidar {
 enum LidarType {
+  // vanjee_716mini = 0,
+  // vanjee_718h,
+  // vanjee_719,
+  // vanjee_719c,
+  // vanjee_719e,
   vanjee_720,
   vanjee_720_16,
   vanjee_720_32,
+  // vanjee_721,
   vanjee_722,
   vanjee_722f,
+  vanjee_722h,
+  vanjee_722z,
+  // vanjee_733,
+  vanjee_750,
+  vanjee_760
 };
 inline std::string lidarTypeToStr(const LidarType &type) {
   std::string str = "";
   switch (type) {
+    // case LidarType::vanjee_716mini:
+    //   str = "vanjee_716mini";
+    //   break;
+    // case LidarType::vanjee_718h:
+    //   str = "vanjee_718h";
+    //   break;
+    // case LidarType::vanjee_719:
+    //   str = "vanjee_719";
+    //   break;
+    // case LidarType::vanjee_719c:
+    //   str = "vanjee_719c";
+    //   break;
+    // case LidarType::vanjee_719e:
+    //   str = "vanjee_719e";
+    //   break;
     case LidarType::vanjee_720:
     case LidarType::vanjee_720_16:
       str = "vanjee_720_16";
@@ -63,11 +89,29 @@ inline std::string lidarTypeToStr(const LidarType &type) {
     case LidarType::vanjee_720_32:
       str = "vanjee_720_32";
       break;
+    // case LidarType::vanjee_721:
+    //   str = "vanjee_721";
+    //   break;
     case LidarType::vanjee_722:
       str = "vanjee_722";
       break;
     case LidarType::vanjee_722f:
       str = "vanjee_722f";
+      break;
+    case LidarType::vanjee_722h:
+      str = "vanjee_722h";
+      break;
+    case LidarType::vanjee_722z:
+      str = "vanjee_722z";
+      break;
+    // case LidarType::vanjee_733:
+    //   str = "vanjee_733";
+    //   break;
+    case LidarType::vanjee_750:
+      str = "vanjee_750";
+      break;
+    case LidarType::vanjee_760:
+      str = "vanjee_760";
       break;
 
     default:
@@ -78,15 +122,38 @@ inline std::string lidarTypeToStr(const LidarType &type) {
   return str;
 }
 inline LidarType strToLidarType(const std::string &type) {
+  // if (type == "vanjee_716mini") {
+  //   return LidarType::vanjee_716mini;
+  // } else if (type == "vanjee_718h") {
+  //   return LidarType::vanjee_718h;
+  // } else if (type == "vanjee_719") {
+  //   return LidarType::vanjee_719;
+  // } else if (type == "vanjee_719c") {
+  //   return LidarType::vanjee_719c;
+  // } else if (type == "vanjee_719e") {
+  //   return LidarType::vanjee_719e;
+  // } else
   if (type == "vanjee_720" || type == "vanjee_720_16") {
     return LidarType::vanjee_720_16;
   } else if (type == "vanjee_720_32") {
     return LidarType::vanjee_720_32;
+  // } else if (type == "vanjee_721") {
+  //   return LidarType::vanjee_721;
   } else if (type == "vanjee_722") {
     return LidarType::vanjee_722;
   } else if (type == "vanjee_722f") {
     return LidarType::vanjee_722f;
-  } 
+  } else if (type == "vanjee_722h") {
+    return LidarType::vanjee_722h;
+  } else if (type == "vanjee_722z") {
+    return LidarType::vanjee_722z;
+  // } else if (type == "vanjee_733") {
+  //   return LidarType::vanjee_733;
+  } else if (type == "vanjee_750") {
+    return LidarType::vanjee_750;
+  } else if (type == "vanjee_760") {
+    return LidarType::vanjee_760;
+  }
 
   else {
     WJ_ERROR << "Wrong lidar type: " << type << WJ_REND;
@@ -185,6 +252,8 @@ struct WJDecoderParam {
   bool device_ctrl_cmd_enable = false;
   bool send_packet_enable = false;
   bool recv_packet_enable = false;
+  bool send_lidar_param_enable = false;
+  bool recv_lidar_param_cmd_enable = false;
 
   bool tail_filter_enable = false;
 
@@ -206,6 +275,8 @@ struct WJDecoderParam {
     WJ_INFOL << "imu_param_path: " << imu_param_path << WJ_REND;
     WJ_INFOL << "publish_mode: " << publish_mode << WJ_REND;
     WJ_INFOL << "point_cloud_masking: " << hide_points_range << WJ_REND;
+    WJ_INFOL << "ts_first_point: " << ts_first_point << WJ_REND;
+    // WJ_INFOL << "use_offset_timestamp: " << use_offset_timestamp << WJ_REND;
     WJ_INFO << "------------------------------------------------" << WJ_REND;
     transform_param.print();
   }

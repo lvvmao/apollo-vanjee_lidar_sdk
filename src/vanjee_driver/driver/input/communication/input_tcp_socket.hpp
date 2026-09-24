@@ -196,8 +196,8 @@ inline DWORD InputTcpSocket::getInterfaceIndex(const char *interface_name) {
 
 inline int InputTcpSocket::createTcpSocket(const std::string &interface_name, uint16_t lidarPort, const std::string &lidarIp, uint16_t hostPort,
                                            const std::string &hostIp) {
-  int fd;
-  int ret;
+  int fd = -1;
+  int ret = -1;
   int reuse = 1;
   if (hostIp == "0.0.0.0" || lidarIp == "0.0.0.0") {
     perror("ip err: ");
@@ -497,8 +497,8 @@ InputTcpSocket::~InputTcpSocket() {
 
 inline int InputTcpSocket::createTcpSocket(const std::string &interface_name, uint16_t lidarPort, const std::string &lidarIp, uint16_t hostPort,
                                            const std::string &hostIp) {
-  int fd;
-  int ret;
+  int fd = -1;
+  int ret = -1;
   int reuse = 1;
 
   if (hostIp == "0.0.0.0" || lidarIp == "0.0.0.0") {
@@ -626,7 +626,7 @@ int32 InputTcpSocket::send_(uint8 *buf, uint32 size) {
   }
 
   if (m_bConnected_ && fds_ > 0) {
-    ret = send(fds_, buf, size, 0);
+    ret = send(fds_, buf, size, MSG_NOSIGNAL);
   }
 
   if (ret == -1) {
@@ -773,8 +773,8 @@ InputTcpSocket::~InputTcpSocket() {
 
 inline int InputTcpSocket::createTcpSocket(const std::string &interface_name, uint16_t lidarPort, const std::string &lidarIp, uint16_t hostPort,
                                            const std::string &hostIp) {
-  int fd;
-  int ret;
+  int fd = -1;
+  int ret = -1;
   int reuse = 1;
   if (hostIp == "0.0.0.0" || lidarIp == "0.0.0.0") {
     perror("ip err: ");
@@ -890,7 +890,7 @@ int32 InputTcpSocket::send_(uint8 *buf, uint32 size) {
   }
 
   if (m_bConnected_ && fds_ > 0) {
-    ret = send(fds_, buf, size, 0);
+    ret = send(fds_, buf, size, MSG_NOSIGNAL);
   }
 
   if (ret == -1) {

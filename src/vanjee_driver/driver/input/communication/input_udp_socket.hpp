@@ -90,7 +90,7 @@ inline bool InputUdpSocket::init() {
   int ret = -1;
   while (ret < 0 && attempt < create_socket_retry_num) {
     ret = WSAStartup(version, &wsaData);
-    if (msop_fd > 0)
+    if (ret > 0)
       break;
     Sleep(5000);
     attempt++;
@@ -184,8 +184,8 @@ inline DWORD InputUdpSocket::getInterfaceIndex(const char* interface_name) {
 }
 
 inline int InputUdpSocket::createUdpSocket(const std::string& interface_name, uint16_t port, const std::string& hostIp, const std::string& grpIp) {
-  int fd;
-  int ret;
+  int fd = -1;
+  int ret = -1;
   int reuse = 1;
   if (hostIp == "0.0.0.0" && grpIp == "0.0.0.0") {
     perror("ip err: ");
@@ -482,8 +482,8 @@ inline InputUdpSocket ::~InputUdpSocket() {
 }
 
 inline int InputUdpSocket::createUdpSocket(const std::string &interface_name, uint16_t port, const std::string &honstIp, const std::string &grpIp) {
-  int fd;
-  int ret;
+  int fd = -1;
+  int ret = -1;
   int reuse = 1;
   if (honstIp == "0.0.0.0" && grpIp == "0.0.0.0") {
     perror("ip err: ");
@@ -734,8 +734,8 @@ InputUdpSocket::~InputUdpSocket() {
 }
 
 inline int InputUdpSocket::createUdpSocket(const std::string &interface_name, uint16_t port, const std::string &hostIp, const std::string &grpIp) {
-  int fd;
-  int ret;
+  int fd = -1;
+  int ret = -1;
   int reuse = 1;
   if (hostIp == "0.0.0.0" && grpIp == "0.0.0.0") {
     perror("ip err: ");

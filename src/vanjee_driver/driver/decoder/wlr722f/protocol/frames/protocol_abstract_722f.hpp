@@ -30,13 +30,13 @@ class ProtocolAbstract722F : public ProtocolAbstract {
     }
 
     return (std::make_shared<ProtocolBase>(CheckType, Type, DeviceType, Sp_Cmd->MainCmd, Sp_Cmd->SubCmd, *content,
-                                           ProtocolBase::DataEndiannessMode::little_endian))
+                                           ProtocolBase::DataEndiannessMode::little_endian, 0xFFAA))
         ->GetBytes(ProtocolBase::ProtocolVersionDifop::version_v1);
   }
 
   virtual std::shared_ptr<std::vector<uint8>> SetRequest() override {
     return (std::make_shared<ProtocolBase>(CheckType, Type, DeviceType, Sp_Cmd->MainCmd, Sp_Cmd->SubCmd, *Params->GetBytes(),
-                                           ProtocolBase::DataEndiannessMode::little_endian))
+                                           ProtocolBase::DataEndiannessMode::little_endian, 0xFFAA))
         ->GetBytes(ProtocolBase::ProtocolVersionDifop::version_v1);
   }
 };

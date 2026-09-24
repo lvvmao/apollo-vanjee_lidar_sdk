@@ -74,7 +74,7 @@ class Params_ImuPacketGet722F : public ParamsAbstract {
     index += 4;
     memcpy(&imu_nsec_, buf + index, sizeof(int32_t));
     index += 4;
-    for (int i = 0; i < sizeof(remain1_); i++) {
+    for (uint32_t i = 0; i < sizeof(remain1_); i++) {
       remain1_[i] = *(buf + index++);
     }
     memcpy(&imu_linear_acce_x_, buf + index, sizeof(int32_t));
@@ -91,7 +91,7 @@ class Params_ImuPacketGet722F : public ParamsAbstract {
     index += 4;
     memcpy(&frame_id_, buf + index, sizeof(int16_t));
     index += 2;
-    for (int i = 0; i < sizeof(remain2_); i++) {
+    for (uint32_t i = 0; i < sizeof(remain2_); i++) {
       remain2_[i] = *(buf + index++);
     }
   }

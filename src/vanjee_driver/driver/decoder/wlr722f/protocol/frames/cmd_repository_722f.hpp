@@ -50,6 +50,8 @@ class CmdRepository722F {
   const std::shared_ptr<CmdClass> sp_get_imu_packet_ = std::make_shared<CmdClass>(0x04, 0x08);
   const std::shared_ptr<CmdClass> sp_temperature_param_get_ = std::make_shared<CmdClass>(0x04, 0x02);
   const std::shared_ptr<CmdClass> sp_get_error_code_ = std::make_shared<CmdClass>(0x04, 0x10);
+  const std::shared_ptr<CmdClass> sp_firmware_version_get_ = std::make_shared<CmdClass>(0x06, 0x06);
+  const std::shared_ptr<CmdClass> sp_sn_get_ = std::make_shared<CmdClass>(0x04, 0x01);
 
   static CmdRepository722F* CreateInstance() {
     if (p_CmdRepository722f == nullptr)

@@ -45,11 +45,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 
 #include <vanjee_driver/driver/driver_param.hpp>
+#include <vanjee_driver/utility/json_parse.hpp>
 #include <vanjee_driver/utility/sync_queue.hpp>
 
 #include "protocol_base.hpp"
 #include "vanjee_driver/common/super_header.hpp"
 #include "vanjee_driver/msg/device_ctrl_msg.hpp"
+#include "vanjee_driver/msg/lidar_parameter_interface_msg.hpp"
 
 namespace vanjee {
 namespace lidar {
@@ -125,18 +127,20 @@ class DifopBase {
 
   DifopBase();
   bool init();
-  bool start(WJDriverParam driver_param);
+  bool start();
   bool stop();
   void udpSendData();
   virtual void loopParsingProcess();
-  void singleParsingProcess();
+  virtual void singleParsingProcess();
   bool processDifoPktFlag();
   void setOrgProtocolBase(ProtocolBase &protocolBase);
   void dataEnqueue(std::string ip, std::shared_ptr<std::vector<uint8>> buf);
   bool regCallback(udpSendCallback udpsend, frameCallback frameCb);
 
+  void paramInit(WJDriverParam driver_param);
   virtual void initGetDifoCtrlDataMapPtr() = 0;
   virtual void addItem2GetDifoCtrlDataMapPtr(const DeviceCtrl &device_ctrl){};
+  virtual void addItem2GetDifoCtrlDataMapPtr(const LidarParameterInterface &lidar_param){};
 
  protected:
   SyncQueue<std::shared_ptr<BufInfo>> BufInfo_Queue_;
@@ -170,16 +174,19 @@ bool DifopBase::init() {
   return true;
 }
 
-bool DifopBase::start(WJDriverParam driver_param) {
+void DifopBase::paramInit(WJDriverParam driver_param) {
   param_ = driver_param;
+}
+
+bool DifopBase::start() {
   if (start_flag_) {
     return false;
   }
 
   to_exit_recv_ = false;
-  if (driver_param.input_type == InputType::ONLINE_LIDAR)
+  if (param_.input_type == InputType::ONLINE_LIDAR)
     send_thread_ = std::thread(std::bind(&DifopBase::udpSendData, this));
-  if (driver_param.input_param.connect_type == 2 || driver_param.input_param.connect_type == 3)
+  if (param_.input_param.connect_type == 2 || param_.input_param.connect_type == 3)
     handle_thread_ = std::thread(std::bind(&DifopBase::loopParsingProcess, this));
   else
     handle_thread_ = std::thread(std::bind(&DifopBase::singleParsingProcess, this));
@@ -282,7 +289,7 @@ void DifopBase::loopParsingProcess() {
     uint32 indexLast = 0;
     std::shared_ptr<std::vector<std::vector<uint8>>> frames = std::make_shared<std::vector<std::vector<uint8>>>();
     for (uint32 i = 0; i < data.size(); i++) {
-      if (param_.lidar_type == LidarType::vanjee_722f) {
+      if (param_.lidar_type == LidarType::vanjee_722f || param_.lidar_type == LidarType::vanjee_722h || param_.lidar_type == LidarType::vanjee_722z) {
         if (data.size() - i < ProtocolBase::FRAME_MIN_LENGTH_V1)
           break;
       } else {
@@ -336,7 +343,7 @@ void DifopBase::singleParsingProcess() {
       continue;
     std::vector<uint8> &data = *(bufInfo->Buf);
 
-    if (param_.lidar_type == LidarType::vanjee_722f) {
+    if (param_.lidar_type == LidarType::vanjee_722f || param_.lidar_type == LidarType::vanjee_722h || param_.lidar_type == LidarType::vanjee_722z) {
       if (data.size() < ProtocolBase::FRAME_MIN_LENGTH_V1)
         continue;
     } else {

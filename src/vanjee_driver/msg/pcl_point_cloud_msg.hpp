@@ -140,21 +140,59 @@ class PointCloudT : public ::pcl::PointCloud<T_Point> {
 
 }  // namespace vanjee
 
-POINT_CLOUD_REGISTER_POINT_STRUCT(
-    vanjee::lidar::PointXYZIRT,
-    (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(std::uint16_t, ring, ring)(double, timestamp, timestamp)
 #ifdef ENABLE_GTEST
-        (std::uint32_t, point_id, point_id)(float, hor_angle, hor_angle)(float, ver_angle, ver_angle)(float, distance, distance)(std::uint8_t, flag,
-                                                                                                                                 flag)
-#endif
+POINT_CLOUD_REGISTER_POINT_STRUCT(
+  vanjee::lidar::PointXYZIRT,
+  (float, x, x)
+  (float, y, y)
+  (float, z, z)
+  (float, intensity, intensity)
+  (std::uint16_t, ring, ring)
+  (double, timestamp, timestamp)
+  (std::uint32_t, point_id, point_id)
+  (float, hor_angle, hor_angle)
+  (float, ver_angle, ver_angle)
+  (float, distance, distance)
+  (std::uint8_t, flag, flag)
 )
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(
-    vanjee::lidar::PointXYZIRTT,
-    (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(std::uint16_t, ring, ring)(double, timestamp, timestamp)(std::uint8_t, tag,
-                                                                                                                                  tag)
-#ifdef ENABLE_GTEST
-        (std::uint32_t, point_id, point_id)(float, hor_angle, hor_angle)(float, ver_angle, ver_angle)(float, distance, distance)(std::uint8_t, flag,
-                                                                                                                                 flag)
-#endif
+  vanjee::lidar::PointXYZIRTT,
+  (float, x, x)
+  (float, y, y)
+  (float, z, z)
+  (float, intensity, intensity)
+  (std::uint16_t, ring, ring)
+  (double, timestamp, timestamp)
+  (std::uint8_t, tag, tag)
+  (std::uint32_t, point_id, point_id)
+  (float, hor_angle, hor_angle)
+  (float, ver_angle, ver_angle)
+  (float, distance, distance)
+  (std::uint8_t,flag, flag)
 )
+
+#else
+
+POINT_CLOUD_REGISTER_POINT_STRUCT(
+  vanjee::lidar::PointXYZIRT,
+  (float, x, x)
+  (float, y, y)
+  (float, z, z)
+  (float, intensity, intensity)
+  (std::uint16_t, ring, ring)
+  (double, timestamp, timestamp)
+)
+
+POINT_CLOUD_REGISTER_POINT_STRUCT(
+  vanjee::lidar::PointXYZIRTT,
+  (float, x, x)
+  (float, y, y)
+  (float, z, z)
+  (float, intensity, intensity)
+  (std::uint16_t, ring, ring)
+  (double, timestamp, timestamp)
+  (std::uint8_t, tag, tag)
+)
+
+#endif

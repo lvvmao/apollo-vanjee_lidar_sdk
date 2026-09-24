@@ -40,6 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vanjee_driver/common/error_code.hpp>
 #include <vanjee_driver/driver/decoder/basic_attr.hpp>
 #include <vanjee_driver/driver/decoder/chan_angles.hpp>
+#include <vanjee_driver/driver/decoder/decoder_packet_base/imu/imuParamGet.hpp>
 #include <vanjee_driver/driver/decoder/imu_calibration_param.hpp>
 #include <vanjee_driver/driver/decoder/member_checker.hpp>
 #include <vanjee_driver/driver/decoder/section.hpp>
@@ -111,6 +112,8 @@ typedef struct _FaultParams {
   double ts;
 } FaultParams;
 
+enum LidarParam { work_mode = 1, temperature, firmware_version, sn, acceleration, fault_code = 0x0100 };
+
 #define INIT_ONLY_ONCE()         \
   static bool init_flag = false; \
   if (init_flag)                 \
@@ -142,8 +145,8 @@ class Decoder {
   bool isValueInRange(uint16_t channel, float angle, float distance, const std::vector<HideRangeParams> &ranges);
 
   void regCallback(const std::function<void(const Error &)> &cb_excep, const std::function<void(uint16_t, double)> &cb_split_frame,
-                   const std::function<void(void)> &cb_imu_pkt = nullptr, const std::function<void(double)> &cb_scan_data = nullptr,
-                   const std::function<void(double)> &cb_device_ctrl_state = nullptr);
+                   const std::function<void(void)> &cb_imu_pkt = nullptr, const std::function<void(double)> &cb_scan_data = nullptr); //,
+                  //  const std::function<void(double)> &cb_device_ctrl_state = nullptr, const std::function<void(double)> &cb_lidar_param = nullptr);
 
   void regGetDifoCtrlDataInterface(std::shared_ptr<std::map<uint16, GetDifoCtrlClass>> get_difo_ctrl_map_ptr);
 
@@ -151,6 +154,7 @@ class Decoder {
   std::shared_ptr<ImuPacket> imu_packet_;
   std::shared_ptr<ScanData> scan_data_;
   std::shared_ptr<DeviceCtrl> device_ctrl_;
+  std::shared_ptr<LidarParameterInterface> lidar_param_;
 
  public:
   double cloudTs();
@@ -160,7 +164,9 @@ class Decoder {
   int32_t rpmOffsetAngle(uint32_t rpm, double time);
   uint32_t crc32Mpeg2Padded(const uint8_t *p_data, int data_length);
   void deviceStatePublish(uint16_t fault_id, uint16_t fault_code, uint16_t device_state, double pkt_ts);
-  double local2utcOffsetTimestamp();
+  void addItem2GetDifoCtrlDataMapPtr(const LidarParameterInterface &lidar_param);
+  void lidarParameterPublish(const LidarParameterInterface &lidar_param, double ts);
+  void getLidarParameterDataFormat(LidarParameterInterface &lidar_param, std::map<uint16, std::string> get_lidar_param);
 
   WJDecoderConstParam const_param_;
   WJDecoderParam param_;
@@ -170,7 +176,10 @@ class Decoder {
   std::function<void(double)> cb_scan_data_;
   std::function<void(const Error &)> cb_excep_;
   std::function<void(double)> cb_device_ctrl_state_;
+  std::function<void(double)> cb_lidar_param_;
   std::shared_ptr<std::map<uint16, GetDifoCtrlClass>> get_difo_ctrl_map_ptr_;
+  std::map<uint16, LidarParameterInterface> get_lidar_param_msg_;
+  std::mutex mtx_lidar_param_;
 
 #ifdef ENABLE_TRANSFORM
   Eigen::Matrix4d trans_;
@@ -180,6 +189,7 @@ class Decoder {
 #define SIN(angle) this->trigon_.sin(angle)
 #define COS(angle) this->trigon_.cos(angle)
 
+  std::shared_ptr<ImuParamGet> m_imu_params_get_;
   double packet_duration_;
   DistanceSection distance_section_;
   Projection projection;
@@ -189,7 +199,6 @@ class Decoder {
   double prev_pkt_ts_;
   double first_point_ts_;
   double last_point_ts_;
-  double local_utc_offset_ts_ = 0;
   uint16_t first_line_id_;
   bool imu_ready_;
   bool point_cloud_ready_;
@@ -210,13 +219,15 @@ void Decoder<T_PointCloud>::regGetDifoCtrlDataInterface(std::shared_ptr<std::map
 template <typename T_PointCloud>
 inline void Decoder<T_PointCloud>::regCallback(const std::function<void(const Error &)> &cb_excep,
                                                const std::function<void(uint16_t, double)> &cb_split_frame,
-                                               const std::function<void(void)> &cb_imu_pkt, const std::function<void(double)> &cb_scan_data,
-                                               const std::function<void(double)> &cb_device_ctrl_state) {
+                                               const std::function<void(void)> &cb_imu_pkt, const std::function<void(double)> &cb_scan_data){//,
+                                              //  const std::function<void(double)> &cb_device_ctrl_state,
+                                              //  const std::function<void(double)> &cb_lidar_param) {
   cb_excep_ = cb_excep;
   cb_split_frame_ = cb_split_frame;
   cb_imu_pkt_ = cb_imu_pkt;
   cb_scan_data_ = cb_scan_data;
-  cb_device_ctrl_state_ = cb_device_ctrl_state;
+  // cb_device_ctrl_state_ = cb_device_ctrl_state;
+  // cb_lidar_param_ = cb_lidar_param;
 }
 
 template <typename T_PointCloud>
@@ -231,9 +242,9 @@ inline Decoder<T_PointCloud>::Decoder(const WJDecoderConstParam &const_param, co
       first_point_ts_(0.0),
       last_point_ts_(0.0),
       first_line_id_(1),
-      hide_range_flag_(false),
       imu_ready_(false),
-      point_cloud_ready_(false) {
+      point_cloud_ready_(false),
+      hide_range_flag_(false) {
   pre_fault_params_ = std::vector<FaultParams>{{0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0},
                                                {0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0}, {0, 0.0}};
   hidePointsParamsLoad();
@@ -244,19 +255,6 @@ inline Decoder<T_PointCloud>::Decoder(const WJDecoderConstParam &const_param, co
   Eigen::Translation3d current_translation(param_.transform_param.x, param_.transform_param.y, param_.transform_param.z);
   trans_ = (current_translation * current_rotation_z * current_rotation_y * current_rotation_x).matrix();
 #endif
-
-  local_utc_offset_ts_ = local2utcOffsetTimestamp();
-}
-
-template <typename T_PointCloud>
-inline double Decoder<T_PointCloud>::local2utcOffsetTimestamp() {
-  std::time_t now = std::time(nullptr);
-  std::tm local_tm = *std::localtime(&now);
-  std::tm utc_tm = *std::gmtime(&now);
-  std::time_t local_seconds = std::mktime(&local_tm);
-  std::time_t utc_seconds = std::mktime(&utc_tm);
-  int timezone_offset = static_cast<int>(local_seconds - utc_seconds);
-  return (double)timezone_offset;
 }
 
 template <typename T_PointCloud>
@@ -292,6 +290,66 @@ inline void Decoder<T_PointCloud>::transformPoint(float &x, float &y, float &z) 
 }
 
 template <typename T_PointCloud>
+inline void Decoder<T_PointCloud>::addItem2GetDifoCtrlDataMapPtr(const LidarParameterInterface &lidar_param) {
+  mtx_lidar_param_.lock();
+  if (get_lidar_param_msg_.count(lidar_param.cmd_id) > 0) {
+    get_lidar_param_msg_[lidar_param.cmd_id] = lidar_param;
+  } else {
+    get_lidar_param_msg_.emplace(lidar_param.cmd_id, lidar_param);
+  }
+  mtx_lidar_param_.unlock();
+}
+
+template <typename T_PointCloud>
+void Decoder<T_PointCloud>::getLidarParameterDataFormat(LidarParameterInterface &lidar_param, std::map<uint16, std::string> get_lidar_param) {
+  if (lidar_param.cmd_id == (uint16_t)LidarParam::work_mode) {
+    lidar_param.data = R"({
+  "work_mode": )" + get_lidar_param[lidar_param.cmd_id] +
+                       R"(
+})";
+  } else if (lidar_param.cmd_id == (uint16_t)LidarParam::temperature) {
+    lidar_param.data = R"({
+  "temperature": )" + get_lidar_param[lidar_param.cmd_id] +
+                       R"(
+})";
+  } else if (lidar_param.cmd_id == (uint16_t)LidarParam::firmware_version) {
+    lidar_param.data = R"({
+  "firmware_version": ")" +
+                       get_lidar_param[lidar_param.cmd_id] + R"("
+})";
+  } else if (lidar_param.cmd_id == (uint16_t)LidarParam::sn) {
+    lidar_param.data = R"({
+  "sn": ")" + get_lidar_param[lidar_param.cmd_id] +
+                       R"("
+})";
+  } else if (lidar_param.cmd_id == (uint16_t)LidarParam::fault_code) {
+    lidar_param.data = R"({
+)" + get_lidar_param[lidar_param.cmd_id] +
+                       R"("
+})";
+  } else if (lidar_param.cmd_id == (uint16_t)LidarParam::acceleration) {
+    lidar_param.data = R"({
+  "acceleration_range": )" +
+                       get_lidar_param[lidar_param.cmd_id] +
+                       R"(
+})";
+  }
+}
+
+template <typename T_PointCloud>
+void Decoder<T_PointCloud>::lidarParameterPublish(const LidarParameterInterface &lidar_param, double ts) {
+  if (!param_.send_lidar_param_enable) {
+    return;
+  }
+
+  lidar_param_->cmd_id = lidar_param.cmd_id;
+  lidar_param_->cmd_type = lidar_param.cmd_type;
+  lidar_param_->repeat_interval = lidar_param.repeat_interval;
+  lidar_param_->data = lidar_param.data;
+  cb_lidar_param_(ts);
+}
+
+template <typename T_PointCloud>
 void Decoder<T_PointCloud>::deviceStatePublish(uint16_t fault_id, uint16_t fault_code, uint16_t device_state, double pkt_ts) {
   bool publish_flag = false;
   double cur_ts = getTimeHost() * 1e-6;
@@ -310,10 +368,25 @@ void Decoder<T_PointCloud>::deviceStatePublish(uint16_t fault_id, uint16_t fault
     } else {
       WJ_ERROR << "Functional safety -- id: " << fault_id << ", fault code: " << fault_code << WJ_REND;
     }
-    device_ctrl_->cmd_id = 0x0100 + fault_id;
-    device_ctrl_->cmd_param = fault_code;
-    device_ctrl_->cmd_state = device_state;
-    cb_device_ctrl_state_(pkt_ts);
+    if (this->param_.device_ctrl_state_enable) {
+      device_ctrl_->cmd_id = 0x0100 + fault_id;
+      device_ctrl_->cmd_param = fault_code;
+      device_ctrl_->cmd_state = device_state;
+      cb_device_ctrl_state_(pkt_ts);
+    }
+
+    if (this->param_.send_lidar_param_enable) {
+      lidar_param_->cmd_id = 0x0100;
+      lidar_param_->cmd_type = 0;
+      lidar_param_->repeat_interval = 0;
+      lidar_param_->data = R"({
+  "fault_code": )" + std::to_string(fault_code) +
+                           R"(
+  "fault_state": )" + std::to_string(device_state) +
+                           R"(
+})";
+      cb_lidar_param_(pkt_ts);
+    }
   }
 }
 
@@ -581,7 +654,6 @@ inline bool Decoder<T_PointCloud>::processMsopPkt(const uint8_t *pkt, size_t siz
   //     LIMIT_CALL(this->cb_excep_(Error(ERRCODE_WRONGMSOPLEN)), 1);
   //     return false;
   // }
-  // /// @brief Packet的标志字节是否匹配。
   return decodeMsopPkt(pkt, size);
 }
 

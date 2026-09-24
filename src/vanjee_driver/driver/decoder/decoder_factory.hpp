@@ -39,10 +39,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <vanjee_driver/driver/decoder/decoder.hpp>
+// #include <vanjee_driver/driver/decoder/wlr716mini/decoder/decoder_vanjee_716mini.hpp>
+// #include <vanjee_driver/driver/decoder/wlr718h/decoder/decoder_vanjee_718h.hpp>
+// #include <vanjee_driver/driver/decoder/wlr719/decoder/decoder_vanjee_719.hpp>
+// #include <vanjee_driver/driver/decoder/wlr719c/decoder/decoder_vanjee_719c.hpp>
+// #include <vanjee_driver/driver/decoder/wlr719e/decoder/decoder_vanjee_719e.hpp>
 #include <vanjee_driver/driver/decoder/wlr720/decoder/decoder_vanjee_720.hpp>
 #include <vanjee_driver/driver/decoder/wlr720_32/decoder/decoder_vanjee_720_32.hpp>
+// #include <vanjee_driver/driver/decoder/wlr721/decoder/decoder_vanjee_721.hpp>
 #include <vanjee_driver/driver/decoder/wlr722/decoder/decoder_vanjee_722.hpp>
 #include <vanjee_driver/driver/decoder/wlr722f/decoder/decoder_vanjee_722f.hpp>
+#include <vanjee_driver/driver/decoder/wlr722h/decoder/decoder_vanjee_722h.hpp>
+#include <vanjee_driver/driver/decoder/wlr722z/decoder/decoder_vanjee_722z.hpp>
+// #include <vanjee_driver/driver/decoder/wlr733/decoder/decoder_vanjee_733.hpp>
+#include <vanjee_driver/driver/decoder/wlr750/decoder/decoder_vanjee_750.hpp>
+#include <vanjee_driver/driver/decoder/wlr760/decoder/decoder_vanjee_760.hpp>
 
 namespace vanjee {
 namespace lidar {
@@ -55,6 +66,21 @@ template <typename T_PointCloud>
 inline std::shared_ptr<Decoder<T_PointCloud>> DecoderFactory<T_PointCloud>::createDecoder(LidarType type, const WJDecoderParam &param) {
   std::shared_ptr<Decoder<T_PointCloud>> ret_ptr;
   switch (type) {
+    // case LidarType::vanjee_716mini:
+    //   ret_ptr = std::make_shared<DecoderVanjee716Mini<T_PointCloud>>(param);
+    //   break;
+    // case LidarType::vanjee_718h:
+    //   ret_ptr = std::make_shared<DecoderVanjee718H<T_PointCloud>>(param);
+    //   break;
+    // case LidarType::vanjee_719:
+    //   ret_ptr = std::make_shared<DecoderVanjee719<T_PointCloud>>(param);
+    //   break;
+    // case LidarType::vanjee_719c:
+    //   ret_ptr = std::make_shared<DecoderVanjee719C<T_PointCloud>>(param);
+    //   break;
+    // case LidarType::vanjee_719e:
+    //   ret_ptr = std::make_shared<DecoderVanjee719E<T_PointCloud>>(param);
+    //   break;
     case LidarType::vanjee_720:
     case LidarType::vanjee_720_16:
       ret_ptr = std::make_shared<DecoderVanjee720<T_PointCloud>>(param);
@@ -62,11 +88,29 @@ inline std::shared_ptr<Decoder<T_PointCloud>> DecoderFactory<T_PointCloud>::crea
     case LidarType::vanjee_720_32:
       ret_ptr = std::make_shared<DecoderVanjee720_32<T_PointCloud>>(param);
       break;
+    // case LidarType::vanjee_721:
+    //   ret_ptr = std::make_shared<DecoderVanjee721<T_PointCloud>>(param);
+    //   break;
     case LidarType::vanjee_722:
       ret_ptr = std::make_shared<DecoderVanjee722<T_PointCloud>>(param);
       break;
     case LidarType::vanjee_722f:
       ret_ptr = std::make_shared<DecoderVanjee722F<T_PointCloud>>(param);
+      break;
+    case LidarType::vanjee_722h:
+      ret_ptr = std::make_shared<DecoderVanjee722H<T_PointCloud>>(param);
+      break;
+    case LidarType::vanjee_722z:
+      ret_ptr = std::make_shared<DecoderVanjee722Z<T_PointCloud>>(param);
+      break;
+    // case LidarType::vanjee_733:
+    //   ret_ptr = std::make_shared<DecoderVanjee733<T_PointCloud>>(param);
+    //   break;
+    case LidarType::vanjee_750:
+      ret_ptr = std::make_shared<DecoderVanjee750<T_PointCloud>>(param);
+      break;
+    case LidarType::vanjee_760:
+      ret_ptr = std::make_shared<DecoderVanjee760<T_PointCloud>>(param);
       break;
 
     default:

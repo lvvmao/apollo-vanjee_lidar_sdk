@@ -126,6 +126,33 @@ inline typename std::enable_if<VANJEE_HAS_MEMBER(T_Point, tag)>::type setTag(T_P
   point.tag = value;
 }
 
+template <typename T_Point>
+inline typename std::enable_if<!VANJEE_HAS_MEMBER(T_Point, ring)>::type getRing(T_Point &point, uint16_t &value) {
+}
+
+template <typename T_Point>
+inline typename std::enable_if<VANJEE_HAS_MEMBER(T_Point, ring)>::type getRing(T_Point &point, uint16_t &value) {
+  value = point.ring;
+}
+
+template <typename T_Point>
+inline typename std::enable_if<!VANJEE_HAS_MEMBER(T_Point, timestamp)>::type getTimestamp(T_Point &point, double &value) {
+}
+
+template <typename T_Point>
+inline typename std::enable_if<VANJEE_HAS_MEMBER(T_Point, timestamp)>::type getTimestamp(T_Point &point, double &value) {
+  value = point.timestamp;
+}
+
+template <typename T_Point>
+inline typename std::enable_if<!VANJEE_HAS_MEMBER(T_Point, tag)>::type getTag(T_Point &point, const uint8_t &value) {
+}
+
+template <typename T_Point>
+inline typename std::enable_if<VANJEE_HAS_MEMBER(T_Point, tag)>::type getTag(T_Point &point, const uint8_t &value) {
+  value = point.tag;
+}
+
 #ifdef ENABLE_GTEST
 template <typename T_Point>
 inline typename std::enable_if<!VANJEE_HAS_MEMBER(T_Point, point_id)>::type setPointId(T_Point &point, const uint32_t &value) {

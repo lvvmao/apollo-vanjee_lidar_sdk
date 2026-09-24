@@ -76,8 +76,6 @@ typedef struct _Vanjee722Difop {
   uint8_t mac_id[2];
   uint16_t circle_id;
   uint8_t time_info[10];
-  // uint8_t data_time[6];
-  // uint8_t timestamp[4];
   int16_t imu_linear_acce_x;
   int16_t imu_linear_acce_y;
   int16_t imu_linear_acce_z;
@@ -156,6 +154,10 @@ typedef struct _Vanjee722DataBlock {
 template <typename T_PointCloud>
 class DecoderVanjee722 : public DecoderMech<T_PointCloud> {
  private:
+  int32_t optcent_2_lidar_arg_ = 21595;
+  float optcent_2_lidar_l_ = 2.581 * 1e-2;
+  float optcent_2_lidar_z_ = 2.1 * 1e-2;
+
   std::vector<double> all_points_luminous_moment_722_16_;
   std::vector<std::vector<double>> all_points_luminous_moment_722_32_;
   const double luminous_period_of_ld_16_ = 8.33e-5;
@@ -187,6 +189,9 @@ class DecoderVanjee722 : public DecoderMech<T_PointCloud> {
   uint32_t end_angle_ = 360000;
 
   int16_t pre_error_code_frame_id_ = -1;
+  double pre_pkt_lidar_ts_ = 0;
+
+  std::map<uint16, std::string> get_lidar_param_;
 
   std::shared_ptr<SplitStrategy> split_strategy_;
   static WJDecoderMechConstParam &getConstParam(uint8_t mode);
@@ -213,7 +218,6 @@ class DecoderVanjee722 : public DecoderMech<T_PointCloud> {
   void SendImuData(Vanjee722Difop difop, double temperature, double timestamp, double lidar_timestamp);
 
  public:
-  std::shared_ptr<ImuParamGet> m_imu_params_get_;
   double imu_temperature_;
 };
 
@@ -232,7 +236,7 @@ bool DecoderVanjee722<T_PointCloud>::lidarParamGet(uint32_t angle_index, uint32_
 
 template <typename T_PointCloud>
 void DecoderVanjee722<T_PointCloud>::initLdLuminousMoment() {
-  double offset = 0;
+  // double offset = 0;
   all_points_luminous_moment_722_16_.resize(19200);
   all_points_luminous_moment_722_32_.resize(2);
   all_points_luminous_moment_722_32_[0].resize(38400);
@@ -298,7 +302,7 @@ inline DecoderVanjee722<T_PointCloud>::DecoderVanjee722(const WJDecoderParam &pa
   this->packet_duration_ = FRAME_DURATION / SINGLE_PKT_NUM;
   split_strategy_ = std::make_shared<SplitStrategyByAngle>(0);
 
-  m_imu_params_get_ = std::make_shared<ImuParamGet>(270, param.transform_param);
+  this->m_imu_params_get_ = std::make_shared<ImuParamGet>(270, param.transform_param);
 
   imu_temperature_ = -100.0;
   if (param.imu_enable == -1) {
@@ -319,16 +323,17 @@ inline DecoderVanjee722<T_PointCloud>::DecoderVanjee722(const WJDecoderParam &pa
     for (int i = 0; i < 1200; i++) {
       eccentricity_angles_real_.push_back(this->chan_angles_.eccentricityAdjust(i, 100));
     }
+    if (param.imu_enable != -1) {
+      this->imu_calibration_param_.loadFromFile(param.imu_param_path);
 
-    // this->imu_calibration_param_.loadFromFile(param.imu_param_path);
+      this->m_imu_params_get_->setImuTempCalibrationParams(this->imu_calibration_param_.x_axis_temp_k, this->imu_calibration_param_.x_axis_temp_b,
+                                                          this->imu_calibration_param_.y_axis_temp_k, this->imu_calibration_param_.y_axis_temp_b,
+                                                          this->imu_calibration_param_.z_axis_temp_k, this->imu_calibration_param_.z_axis_temp_b);
 
-    m_imu_params_get_->setImuTempCalibrationParams(this->imu_calibration_param_.x_axis_temp_k, this->imu_calibration_param_.x_axis_temp_b,
-                                                   this->imu_calibration_param_.y_axis_temp_k, this->imu_calibration_param_.y_axis_temp_b,
-                                                   this->imu_calibration_param_.z_axis_temp_k, this->imu_calibration_param_.z_axis_temp_b);
-
-    m_imu_params_get_->setImuAcceCalibrationParams(this->imu_calibration_param_.x_axis_acc_k, this->imu_calibration_param_.x_axis_acc_b,
-                                                   this->imu_calibration_param_.y_axis_acc_k, this->imu_calibration_param_.y_axis_acc_b,
-                                                   this->imu_calibration_param_.z_axis_acc_k, this->imu_calibration_param_.z_axis_acc_b);
+      this->m_imu_params_get_->setImuAcceCalibrationParams(this->imu_calibration_param_.x_axis_acc_k, this->imu_calibration_param_.x_axis_acc_b,
+                                                          this->imu_calibration_param_.y_axis_acc_k, this->imu_calibration_param_.y_axis_acc_b,
+                                                          this->imu_calibration_param_.z_axis_acc_k, this->imu_calibration_param_.z_axis_acc_b);
+    }
   }
   initLdLuminousMoment();
 }
@@ -361,7 +366,7 @@ inline bool DecoderVanjee722<T_PointCloud>::decodeMsopPkt(const uint8_t *pkt, si
 
 template <typename T_PointCloud>
 void DecoderVanjee722<T_PointCloud>::decodeMsopPktErrorCode(const uint8_t *pkt, size_t size) {
-  if (!this->param_.device_ctrl_state_enable) {
+  if (!this->param_.device_ctrl_state_enable && !this->param_.send_lidar_param_enable) {
     return;
   }
   std::vector<uint8_t> buf(pkt, pkt + size);
@@ -413,18 +418,12 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel16(const uint8_t *pkt, 
   double pkt_lidar_ts = 0;
 
   pkt_host_ts = getTimeHost() * 1e-6;
-  std::tm stm;
-  memset(&stm, 0, sizeof(stm));
-  stm.tm_year = packet.difop.time_info[5] + 100;
-  stm.tm_mon = packet.difop.time_info[4] - 1;
-  stm.tm_mday = packet.difop.time_info[3];
-  stm.tm_hour = packet.difop.time_info[2];
-  stm.tm_min = packet.difop.time_info[1];
-  stm.tm_sec = packet.difop.time_info[0];
+  WJTimestampYMD tm{packet.difop.time_info[5], packet.difop.time_info[4], packet.difop.time_info[3],
+                    packet.difop.time_info[2], packet.difop.time_info[1], packet.difop.time_info[0]};
   double nsec = (packet.difop.time_info[6] + (packet.difop.time_info[7] << 8) + (packet.difop.time_info[8] << 16) +
                  ((packet.difop.time_info[9] & 0x0F) << 24)) *
                 1e-8;
-  pkt_lidar_ts = std::mktime(&stm) + nsec + this->local_utc_offset_ts_;
+  pkt_lidar_ts = parseTimeYMD(&tm) * 1e-6 + nsec;
 
   if (!this->param_.use_lidar_clock)
     pkt_ts = pkt_host_ts;
@@ -433,7 +432,7 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel16(const uint8_t *pkt, 
   }
 
   int32_t resolution = 30;
-  double last_point_to_first_point_time = 0;
+  // double last_point_to_first_point_time = 0;
   if (packet.blocks[1].azimuth - packet.blocks[0].azimuth == 0) {
     resolution = (packet.blocks[2].azimuth - packet.blocks[0].azimuth + 36000) % 36000;
   } else {
@@ -441,6 +440,8 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel16(const uint8_t *pkt, 
   }
 
   if (resolution != 30) {
+    this->prev_pkt_ts_ = pkt_ts;
+    pre_pkt_lidar_ts_ = pkt_lidar_ts;
     return ret;
   }
 
@@ -457,15 +458,20 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel16(const uint8_t *pkt, 
 
   pre_pkt_resolution_ = resolution;
   if (resolution_num_offset_ < 0 && !lidarParamGet(angle_index, packet.blocks[0].azimuth, resolution, packet.block_num, pkt_lidar_ts)) {
+    this->prev_pkt_ts_ = pkt_ts;
+    pre_pkt_lidar_ts_ = pkt_lidar_ts;
     return false;
   }
 
-  if (pkt_lidar_ts != this->prev_pkt_ts_) {
+  if (pkt_lidar_ts != pre_pkt_lidar_ts_) {
     SendImuData(packet.difop, imu_temperature_, pkt_ts, pkt_lidar_ts);
   }
 
-  if (!this->param_.point_cloud_enable)
+  if (!this->param_.point_cloud_enable) {
+    this->prev_pkt_ts_ = pkt_ts;
+    pre_pkt_lidar_ts_ = pkt_lidar_ts;
     return false;
+  }
 
   uint16_t frame_id = ntohs(packet.difop.frame_id);
   uint32_t loss_packets_num = (frame_id + 65536 - pre_frame_id_) % 65536;
@@ -474,7 +480,8 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel16(const uint8_t *pkt, 
   pre_frame_id_ = frame_id;
 
   if (!this->imu_ready_ && !this->point_cloud_ready_) {
-    this->prev_pkt_ts_ = pkt_lidar_ts;
+    this->prev_pkt_ts_ = pkt_ts;
+    pre_pkt_lidar_ts_ = pkt_lidar_ts;
     return ret;
   } else if (!this->point_cloud_ready_) {
     this->point_cloud_ready_ = true;
@@ -613,7 +620,8 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel16(const uint8_t *pkt, 
     azimuth_trans_pre_ = azimuth_trans;
   }
   pre_circle_id_ = ntohs(packet.difop.circle_id);
-  this->prev_pkt_ts_ = pkt_lidar_ts;
+  this->prev_pkt_ts_ = pkt_ts;
+  pre_pkt_lidar_ts_ = pkt_lidar_ts;
   return ret;
 }
 
@@ -630,18 +638,12 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel32(const uint8_t *pkt, 
   protocol_version_ = packet.difop.version;
   pkt_host_ts = getTimeHost() * 1e-6;
   if (protocol_version_ < 3) {
-    std::tm stm;
-    memset(&stm, 0, sizeof(stm));
-    stm.tm_year = packet.difop.time_info[5] + 100;
-    stm.tm_mon = packet.difop.time_info[4] - 1;
-    stm.tm_mday = packet.difop.time_info[3];
-    stm.tm_hour = packet.difop.time_info[2];
-    stm.tm_min = packet.difop.time_info[1];
-    stm.tm_sec = packet.difop.time_info[0];
+    WJTimestampYMD tm{packet.difop.time_info[5], packet.difop.time_info[4], packet.difop.time_info[3],
+                      packet.difop.time_info[2], packet.difop.time_info[1], packet.difop.time_info[0]};
     double nsec = (packet.difop.time_info[6] + (packet.difop.time_info[7] << 8) + (packet.difop.time_info[8] << 16) +
                    ((packet.difop.time_info[9] & 0x0F) << 24)) *
                   1e-8;
-    pkt_lidar_ts = std::mktime(&stm) + nsec + this->local_utc_offset_ts_;
+    pkt_lidar_ts = parseTimeYMD(&tm) * 1e-6 + nsec;
   } else {
     double sec = packet.difop.time_info[0] + (packet.difop.time_info[1] << 8) + (packet.difop.time_info[2] << 16) + (packet.difop.time_info[3] << 24);
     double nsec =
@@ -662,8 +664,11 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel32(const uint8_t *pkt, 
     resolution = (packet.blocks[1].azimuth - packet.blocks[0].azimuth + 36000) % 36000;
   }
 
-  if (resolution != 60 && resolution != 30)
+  if (resolution != 60 && resolution != 30) {
+    this->prev_pkt_ts_ = pkt_ts;
+    pre_pkt_lidar_ts_ = pkt_lidar_ts;
     return false;
+  }
 
   if (resolution != pre_pkt_resolution_) {
     resolution_num_offset_ = -1;
@@ -680,17 +685,22 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel32(const uint8_t *pkt, 
 
   pre_pkt_resolution_ = resolution;
   if (resolution_num_offset_ < 0 && !lidarParamGet(angle_index, packet.blocks[0].azimuth, resolution, packet.block_num, pkt_lidar_ts)) {
+    this->prev_pkt_ts_ = pkt_ts;
+    pre_pkt_lidar_ts_ = pkt_lidar_ts;
     return false;
   }
 
   uint8_t resolution_index = resolution / 30 - 1;
 
-  if (packet.difop.version < 2 && pkt_lidar_ts != this->prev_pkt_ts_) {
+  if (packet.difop.version < 2 && pkt_lidar_ts != pre_pkt_lidar_ts_) {
     SendImuData(packet.difop, imu_temperature_, pkt_ts, pkt_lidar_ts);
   }
 
-  if (!this->param_.point_cloud_enable)
+  if (!this->param_.point_cloud_enable) {
+    this->prev_pkt_ts_ = pkt_ts;
+    pre_pkt_lidar_ts_ = pkt_lidar_ts;
     return false;
+  }
 
   uint16_t frame_id = ntohs(packet.difop.frame_id);
   uint32_t loss_packets_num = (frame_id + 65536 - pre_frame_id_) % 65536;
@@ -699,7 +709,8 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel32(const uint8_t *pkt, 
   pre_frame_id_ = frame_id;
 
   if (!this->imu_ready_ && !this->point_cloud_ready_) {
-    this->prev_pkt_ts_ = pkt_lidar_ts;
+    this->prev_pkt_ts_ = pkt_ts;
+    pre_pkt_lidar_ts_ = pkt_lidar_ts;
     return ret;
   } else if (!this->point_cloud_ready_) {
     this->point_cloud_ready_ = true;
@@ -763,10 +774,10 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel32(const uint8_t *pkt, 
         int32_t verticalVal_722 = this->chan_angles_.vertAdjust(chan);
         uint32_t offset_angle = this->rpmOffsetAngle(packet.difop.rpm, chan * luminous_period_of_adjacent_ld_);
         int32_t azimuth_index = (this->chan_angles_.horizAdjust(chan, azimuth_10, RotateDirection::clockwise) +
-                                 eccentricity_angles_real_[col_index_eccentricity] + offset_angle + 360000) %
+                                 eccentricity_angles_real_[col_index_eccentricity] + offset_angle + 90000) %
                                 360000;
 
-        int32_t angle_horiz_mask = 360000 - azimuth_index;
+        uint32_t angle_horiz_mask = (450000 - azimuth_index) % 360000;
         if (start_angle_ < end_angle_) {
           if (angle_horiz_mask < start_angle_ || angle_horiz_mask > end_angle_) {
             distance = 0;
@@ -782,11 +793,20 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel32(const uint8_t *pkt, 
           distance = 0;
         }
 
+        int32_t optcent_2_lidar_angle_hor = (azimuth_index + optcent_2_lidar_arg_ + 360000) % 360000;
+        if (this->distance_section_.in(distance)) {
+          if (distance - optcent_2_lidar_l_ > 0) {
+            distance -= optcent_2_lidar_l_;
+          } else {
+            distance = 0;
+          }
+        }
+
         if (this->distance_section_.in(distance)) {
           xy = distance * COS(verticalVal_722);
-          x = xy * COS(azimuth_index);
-          y = -xy * SIN(azimuth_index);
-          z = distance * SIN(verticalVal_722);
+          x = xy * SIN(azimuth_index) + optcent_2_lidar_l_ * SIN(optcent_2_lidar_angle_hor);
+          y = xy * COS(azimuth_index) + optcent_2_lidar_l_ * COS(optcent_2_lidar_angle_hor);
+          z = distance * SIN(verticalVal_722) + optcent_2_lidar_z_;
           this->transformPoint(x, y, z);
 
           typename T_PointCloud::PointT point;
@@ -842,7 +862,8 @@ bool DecoderVanjee722<T_PointCloud>::decodeMsopPktChannel32(const uint8_t *pkt, 
     azimuth_trans_pre_ = azimuth_trans;
   }
   pre_circle_id_ = ntohs(packet.difop.circle_id);
-  this->prev_pkt_ts_ = pkt_lidar_ts;
+  this->prev_pkt_ts_ = pkt_ts;
+  pre_pkt_lidar_ts_ = pkt_lidar_ts;
   return ret;
 }
 
@@ -944,22 +965,23 @@ template <typename T_PointCloud>
 void DecoderVanjee722<T_PointCloud>::SendImuData(Vanjee722Difop difop, double temperature, double timestamp, double lidar_timestamp) {
   if (this->param_.imu_enable == -1)
     return;
-  this->imu_ready_ = m_imu_params_get_->imuGet(difop.imu_angle_voc_x, difop.imu_angle_voc_y, difop.imu_angle_voc_z, difop.imu_linear_acce_x,
-                                         difop.imu_linear_acce_y, difop.imu_linear_acce_z, lidar_timestamp, temperature);
+
+  this->imu_ready_ = this->m_imu_params_get_->imuGet(difop.imu_angle_voc_x, difop.imu_angle_voc_y, difop.imu_angle_voc_z, difop.imu_linear_acce_x,
+                                                     difop.imu_linear_acce_y, difop.imu_linear_acce_z, lidar_timestamp, temperature);
   if (this->imu_ready_) {
     this->imu_packet_->timestamp = timestamp;
-    this->imu_packet_->angular_voc[0] = m_imu_params_get_->imu_result_stu_.x_angle;
-    this->imu_packet_->angular_voc[1] = m_imu_params_get_->imu_result_stu_.y_angle;
-    this->imu_packet_->angular_voc[2] = m_imu_params_get_->imu_result_stu_.z_angle;
+    this->imu_packet_->angular_voc[0] = this->m_imu_params_get_->imu_result_stu_.x_angle;
+    this->imu_packet_->angular_voc[1] = this->m_imu_params_get_->imu_result_stu_.y_angle;
+    this->imu_packet_->angular_voc[2] = this->m_imu_params_get_->imu_result_stu_.z_angle;
 
-    this->imu_packet_->linear_acce[0] = m_imu_params_get_->imu_result_stu_.x_acc;
-    this->imu_packet_->linear_acce[1] = m_imu_params_get_->imu_result_stu_.y_acc;
-    this->imu_packet_->linear_acce[2] = m_imu_params_get_->imu_result_stu_.z_acc;
+    this->imu_packet_->linear_acce[0] = this->m_imu_params_get_->imu_result_stu_.x_acc;
+    this->imu_packet_->linear_acce[1] = this->m_imu_params_get_->imu_result_stu_.y_acc;
+    this->imu_packet_->linear_acce[2] = this->m_imu_params_get_->imu_result_stu_.z_acc;
 
-    this->imu_packet_->orientation[0] = m_imu_params_get_->imu_result_stu_.q0;
-    this->imu_packet_->orientation[1] = m_imu_params_get_->imu_result_stu_.q1;
-    this->imu_packet_->orientation[2] = m_imu_params_get_->imu_result_stu_.q2;
-    this->imu_packet_->orientation[3] = m_imu_params_get_->imu_result_stu_.q3;
+    this->imu_packet_->orientation[0] = this->m_imu_params_get_->imu_result_stu_.q0;
+    this->imu_packet_->orientation[1] = this->m_imu_params_get_->imu_result_stu_.q1;
+    this->imu_packet_->orientation[2] = this->m_imu_params_get_->imu_result_stu_.q2;
+    this->imu_packet_->orientation[3] = this->m_imu_params_get_->imu_result_stu_.q3;
 
     this->cb_imu_pkt_();
   }
@@ -1080,12 +1102,12 @@ void DecoderVanjee722<T_PointCloud>::processDifopPkt(std::shared_ptr<ProtocolBas
         }
       }
 
-      // this->imu_calibration_param_.loadFromLiDAR(this->param_.imu_param_path, this->imu_calibration_param_.TEMP_PARAM, param->x_k_, param->x_b_,
-      //                                            param->y_k_, param->y_b_, param->z_k_, param->z_b_);
+      this->imu_calibration_param_.loadFromLiDAR(this->param_.imu_param_path, this->imu_calibration_param_.TEMP_PARAM, param->x_k_, param->x_b_,
+                                                 param->y_k_, param->y_b_, param->z_k_, param->z_b_);
 
       WJ_INFO << param->x_k_ << "," << param->x_b_ << "," << param->y_k_ << "," << param->y_b_ << "," << param->z_k_ << "," << param->z_b_ << WJ_REND;
 
-      m_imu_params_get_->setImuTempCalibrationParams(param->x_k_, param->x_b_, param->y_k_, param->y_b_, param->z_k_, param->z_b_);
+      this->m_imu_params_get_->setImuTempCalibrationParams(param->x_k_, param->x_b_, param->y_k_, param->y_b_, param->z_k_, param->z_b_);
 
       imu_acc_param_get_flag_ = true;
     }
@@ -1113,12 +1135,12 @@ void DecoderVanjee722<T_PointCloud>::processDifopPkt(std::shared_ptr<ProtocolBas
         }
       }
 
-      // this->imu_calibration_param_.loadFromLiDAR(this->param_.imu_param_path, this->imu_calibration_param_.ACC_PARAM, param->x_k_, param->x_b_,
-      //                                            param->y_k_, param->y_b_, param->z_k_, param->z_b_);
+      this->imu_calibration_param_.loadFromLiDAR(this->param_.imu_param_path, this->imu_calibration_param_.ACC_PARAM, param->x_k_, param->x_b_,
+                                                 param->y_k_, param->y_b_, param->z_k_, param->z_b_);
 
       WJ_INFO << param->x_k_ << "," << param->x_b_ << "," << param->y_k_ << "," << param->y_b_ << "," << param->z_k_ << "," << param->z_b_ << WJ_REND;
 
-      m_imu_params_get_->setImuAcceCalibrationParams(param->x_k_, param->x_b_, param->y_k_, param->y_b_, param->z_k_, param->z_b_);
+      this->m_imu_params_get_->setImuAcceCalibrationParams(param->x_k_, param->x_b_, param->y_k_, param->y_b_, param->z_k_, param->z_b_);
 
       imu_ang_param_get_flag_ = true;
     }
@@ -1136,15 +1158,34 @@ void DecoderVanjee722<T_PointCloud>::processDifopPkt(std::shared_ptr<ProtocolBas
     std::shared_ptr<Params_WorkModeGet722> param = std::dynamic_pointer_cast<Params_WorkModeGet722>(params);
     (*(Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[sp_cmd->GetCmdKey()].setStopFlag(true);
 
-  } else if (typeid(*params) == typeid(Params_WorkModeSet722)) {
-    std::shared_ptr<Params_WorkModeSet722> param = std::dynamic_pointer_cast<Params_WorkModeSet722>(params);
-    if (this->param_.device_ctrl_state_enable && param->flag_ == 1) {
-      (*(Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[sp_cmd->GetCmdKey()].setStopFlag(true);
-      this->device_ctrl_->cmd_id = 1;
-      this->device_ctrl_->cmd_state = 1;
-      this->cb_device_ctrl_state_(pre_pkt_time_);
+    if (get_lidar_param_.count((uint16_t)LidarParam::work_mode) > 0) {
+      get_lidar_param_[(uint16_t)LidarParam::work_mode] = std::to_string((uint16_t)param->work_mode_);
+    } else {
+      get_lidar_param_.emplace((uint16_t)LidarParam::work_mode, std::to_string((uint16_t)param->work_mode_));
     }
 
+    if (this->param_.device_ctrl_state_enable) {
+      this->device_ctrl_->cmd_id = 1;
+      this->device_ctrl_->cmd_param = (uint16_t)param->work_mode_;
+      this->device_ctrl_->cmd_state = 1;
+      this->cb_device_ctrl_state_(this->prev_pkt_ts_);
+    }
+
+    if (this->param_.send_lidar_param_enable) {
+      LidarParameterInterface lidar_param;
+      lidar_param.cmd_id = (uint16_t)LidarParam::work_mode;
+      lidar_param.cmd_type = 0;
+      lidar_param.repeat_interval = 0;
+      this->getLidarParameterDataFormat(lidar_param, get_lidar_param_);
+      this->lidarParameterPublish(lidar_param, this->prev_pkt_ts_);
+    }
+
+  } else if (typeid(*params) == typeid(Params_WorkModeSet722)) {
+    std::shared_ptr<Params_WorkModeSet722> param = std::dynamic_pointer_cast<Params_WorkModeSet722>(params);
+    if (param->flag_ == 1) {
+      (*(Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[sp_cmd->GetCmdKey()].setStopFlag(true);
+      (*(Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[CmdRepository722::CreateInstance()->sp_get_work_mode_->GetCmdKey()].setStopFlag(false);
+    }
   } else if (typeid(*params) == typeid(Params_ImuPacketGet722)) {
     std::shared_ptr<Params_ImuPacketGet722> param = std::dynamic_pointer_cast<Params_ImuPacketGet722>(params);
     if (protocol_version_ < 2 || this->param_.imu_enable == -1)
@@ -1157,23 +1198,23 @@ void DecoderVanjee722<T_PointCloud>::processDifopPkt(std::shared_ptr<ProtocolBas
       pkt_ts = getTimeHost() * 1e-6;
 
     if (pre_imu_timestamp_ > 0 && imu_timestamp > pre_imu_timestamp_) {
-      this->imu_ready_ =
-          m_imu_params_get_->imuGet(param->imu_angle_voc_x_, param->imu_angle_voc_y_, param->imu_angle_voc_z_, param->imu_linear_acce_x_,
-                                    param->imu_linear_acce_y_, param->imu_linear_acce_z_, imu_timestamp, -100.0, false, false, false, false, true);
+      this->imu_ready_ = this->m_imu_params_get_->imuGet(param->imu_angle_voc_x_, param->imu_angle_voc_y_, param->imu_angle_voc_z_,
+                                                         param->imu_linear_acce_x_, param->imu_linear_acce_y_, param->imu_linear_acce_z_,
+                                                         imu_timestamp, -100.0, false, false, false, false, true);
       if (this->imu_ready_) {
         this->imu_packet_->timestamp = pkt_ts;
-        this->imu_packet_->angular_voc[0] = m_imu_params_get_->imu_result_stu_.x_angle;
-        this->imu_packet_->angular_voc[1] = m_imu_params_get_->imu_result_stu_.y_angle;
-        this->imu_packet_->angular_voc[2] = m_imu_params_get_->imu_result_stu_.z_angle;
+        this->imu_packet_->angular_voc[0] = this->m_imu_params_get_->imu_result_stu_.x_angle;
+        this->imu_packet_->angular_voc[1] = this->m_imu_params_get_->imu_result_stu_.y_angle;
+        this->imu_packet_->angular_voc[2] = this->m_imu_params_get_->imu_result_stu_.z_angle;
 
-        this->imu_packet_->linear_acce[0] = m_imu_params_get_->imu_result_stu_.x_acc;
-        this->imu_packet_->linear_acce[1] = m_imu_params_get_->imu_result_stu_.y_acc;
-        this->imu_packet_->linear_acce[2] = m_imu_params_get_->imu_result_stu_.z_acc;
+        this->imu_packet_->linear_acce[0] = this->m_imu_params_get_->imu_result_stu_.x_acc;
+        this->imu_packet_->linear_acce[1] = this->m_imu_params_get_->imu_result_stu_.y_acc;
+        this->imu_packet_->linear_acce[2] = this->m_imu_params_get_->imu_result_stu_.z_acc;
 
-        this->imu_packet_->orientation[0] = m_imu_params_get_->imu_result_stu_.q0;
-        this->imu_packet_->orientation[1] = m_imu_params_get_->imu_result_stu_.q1;
-        this->imu_packet_->orientation[2] = m_imu_params_get_->imu_result_stu_.q2;
-        this->imu_packet_->orientation[3] = m_imu_params_get_->imu_result_stu_.q3;
+        this->imu_packet_->orientation[0] = this->m_imu_params_get_->imu_result_stu_.q0;
+        this->imu_packet_->orientation[1] = this->m_imu_params_get_->imu_result_stu_.q1;
+        this->imu_packet_->orientation[2] = this->m_imu_params_get_->imu_result_stu_.q2;
+        this->imu_packet_->orientation[3] = this->m_imu_params_get_->imu_result_stu_.q3;
 
         this->cb_imu_pkt_();
       }

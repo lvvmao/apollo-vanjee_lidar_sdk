@@ -41,7 +41,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdint>
 #include <vector>
 
+// #include <vanjee_driver/driver/decoder/wlr719e/protocol/frames/cmd_repository_719e.hpp>
 #include <vanjee_driver/driver/decoder/wlr722/protocol/frames/cmd_repository_722.hpp>
+#include <vanjee_driver/driver/decoder/wlr750/protocol/frames/cmd_repository_750.hpp>
+#include <vanjee_driver/driver/decoder/wlr760/protocol/frames/cmd_repository_760.hpp>
 #include <vanjee_driver/driver/difop/cmd_class.hpp>
 #include <vanjee_driver/driver/difop/protocol_base.hpp>
 
@@ -78,8 +81,28 @@ class DecoderPacketBase {
     uint16_t protocol_version = vanjee_lidar_point_cloud_packet_base_header.protocol_version_.getVersionId();
 
     switch (lidar_type) {
+      // case 0x190E:
+      //   ret = decoderWlr719ePacket(buf, size, protocol_version, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
+      //                              point_cloud_algorithm_callback);
+      //   break;
+
       case 0x000B:
         ret = decoderWlr722Packet(buf, size, protocol_version, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
+                                  point_cloud_algorithm_callback);
+        break;
+
+      case 0x0101:
+        ret = decoderWlr750bPacket(buf, size, protocol_version, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
+                                   point_cloud_algorithm_callback);
+        break;
+
+      case 0x0102:
+        ret = decoderWlr750cPacket(buf, size, protocol_version, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
+                                   point_cloud_algorithm_callback);
+        break;
+
+      case 0x0201:
+        ret = decoderWlr760Packet(buf, size, protocol_version, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
                                   point_cloud_algorithm_callback);
         break;
 
@@ -88,6 +111,41 @@ class DecoderPacketBase {
     }
     return ret;
   }
+
+  // bool decoderWlr719ePacket(const uint8_t* buf, size_t size, uint16_t protocol_version,
+  //                           std::function<void(DataBlockAngleAndTimestampInfo&, T_DataBlock*)> update_angle_and_timestamp_info_callback,
+  //                           std::function<void(T_DataUnit*, PointInfo&)> decoder_data_unit_callback,
+  //                           std::function<void()> point_cloud_algorithm_callback) {
+  //   std::vector<uint16_t> wlr719e_protocol_version_list = {0x0101};
+  //   bool ret = false;
+  //   if (protocol_version > wlr719e_protocol_version_list[wlr719e_protocol_version_list.size() - 1]) {
+  //     // protocol handshake
+  //     if (decoder_ptr_->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_ != nullptr)
+  //       (*(decoder_ptr_
+  //              ->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[(CmdRepository719E::CreateInstance()->set_protocol_version_cmd_id_ptr_)->GetCmdKey()]
+  //           .setStopFlag(false);
+  //     return false;
+  //   } else {
+  //     if (decoder_ptr_->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_ != nullptr)
+  //       (*(decoder_ptr_
+  //              ->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[(CmdRepository719E::CreateInstance()->set_protocol_version_cmd_id_ptr_)->GetCmdKey()]
+  //           .setStopFlag(true);
+  //   }
+
+  //   switch (protocol_version) {
+  //     case 0x0101:
+  //       if (decoder_packet_general_version_base_ptr_ == nullptr)
+  //         decoder_packet_general_version_base_ptr_ =
+  //             std::make_shared<DecoderPacketGeneralVersionV1_1<T_PointCloud, T_DataBlock, T_DataUnit>>(decoder_ptr_);
+  //       ret = decoder_packet_general_version_base_ptr_->decoderPacket(buf, size, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
+  //                                                                     point_cloud_algorithm_callback);
+  //       break;
+
+  //     default:
+  //       break;
+  //   }
+  //   return ret;
+  // }
 
   bool decoderWlr722Packet(const uint8_t* buf, size_t size, uint16_t protocol_version,
                            std::function<void(DataBlockAngleAndTimestampInfo&, T_DataBlock*)> update_angle_and_timestamp_info_callback,
@@ -124,6 +182,113 @@ class DecoderPacketBase {
     return ret;
   }
 
+  bool decoderWlr750bPacket(const uint8_t* buf, size_t size, uint16_t protocol_version,
+                            std::function<void(DataBlockAngleAndTimestampInfo&, T_DataBlock*)> update_angle_and_timestamp_info_callback,
+                            std::function<void(T_DataUnit*, PointInfo&)> decoder_data_unit_callback,
+                            std::function<void()> point_cloud_algorithm_callback) {
+    std::vector<uint16_t> wlr750b_protocol_version_list = {0x0100, 0x0102};
+    bool ret = false;
+    if (protocol_version > wlr750b_protocol_version_list[wlr750b_protocol_version_list.size() - 1]) {
+      // protocol handshake
+      if (decoder_ptr_->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_ != nullptr)
+        (*(decoder_ptr_
+               ->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[(CmdRepository750::CreateInstance()->set_protocol_version_cmd_id_ptr_)->GetCmdKey()]
+            .setStopFlag(false);
+      return false;
+    } else {
+      if (decoder_ptr_->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_ != nullptr)
+        (*(decoder_ptr_
+               ->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[(CmdRepository750::CreateInstance()->set_protocol_version_cmd_id_ptr_)->GetCmdKey()]
+            .setStopFlag(true);
+    }
+
+    switch (protocol_version) {
+      case 0x0100:
+      case 0x0102:
+        if (decoder_packet_general_version_base_ptr_ == nullptr)
+          decoder_packet_general_version_base_ptr_ =
+              std::make_shared<DecoderPacketGeneralVersionBase<T_PointCloud, T_DataBlock, T_DataUnit>>(decoder_ptr_);
+        ret = decoder_packet_general_version_base_ptr_->decoderPacket(buf, size, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
+                                                                      point_cloud_algorithm_callback);
+        break;
+
+      default:
+        break;
+    }
+    return ret;
+  }
+
+  bool decoderWlr750cPacket(const uint8_t* buf, size_t size, uint16_t protocol_version,
+                            std::function<void(DataBlockAngleAndTimestampInfo&, T_DataBlock*)> update_angle_and_timestamp_info_callback,
+                            std::function<void(T_DataUnit*, PointInfo&)> decoder_data_unit_callback,
+                            std::function<void()> point_cloud_algorithm_callback) {
+    std::vector<uint16_t> wlr750c_protocol_version_list = {0x0101};
+    bool ret = false;
+    if (protocol_version > wlr750c_protocol_version_list[wlr750c_protocol_version_list.size() - 1]) {
+      // protocol handshake
+      if (decoder_ptr_->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_ != nullptr)
+        (*(decoder_ptr_
+               ->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[(CmdRepository750::CreateInstance()->set_protocol_version_cmd_id_ptr_)->GetCmdKey()]
+            .setStopFlag(false);
+      return false;
+    } else {
+      if (decoder_ptr_->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_ != nullptr)
+        (*(decoder_ptr_
+               ->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[(CmdRepository750::CreateInstance()->set_protocol_version_cmd_id_ptr_)->GetCmdKey()]
+            .setStopFlag(true);
+    }
+
+    switch (protocol_version) {
+      case 0x0101:
+        if (decoder_packet_general_version_base_ptr_ == nullptr)
+          decoder_packet_general_version_base_ptr_ =
+              std::make_shared<DecoderPacketGeneralVersionBase<T_PointCloud, T_DataBlock, T_DataUnit>>(decoder_ptr_);
+        ret = decoder_packet_general_version_base_ptr_->decoderPacket(buf, size, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
+                                                                      point_cloud_algorithm_callback);
+        break;
+
+      default:
+        break;
+    }
+    return ret;
+  }
+
+  bool decoderWlr760Packet(const uint8_t* buf, size_t size, uint16_t protocol_version,
+                           std::function<void(DataBlockAngleAndTimestampInfo&, T_DataBlock*)> update_angle_and_timestamp_info_callback,
+                           std::function<void(T_DataUnit*, PointInfo&)> decoder_data_unit_callback,
+                           std::function<void()> point_cloud_algorithm_callback) {
+    std::vector<uint16_t> wlr760_protocol_version_list = {0x0100, 0x0101, 0x0184};
+    bool ret = false;
+    if (protocol_version > wlr760_protocol_version_list[wlr760_protocol_version_list.size() - 1]) {
+      // protocol handshake
+      if (decoder_ptr_->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_ != nullptr)
+        (*(decoder_ptr_
+               ->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[CmdRepository760::CreateInstance()->set_protocol_version_cmd_id_ptr_->GetCmdKey()]
+            .setStopFlag(false);
+      return false;
+    } else {
+      if (decoder_ptr_->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_ != nullptr)
+        (*(decoder_ptr_
+               ->Decoder<T_PointCloud>::get_difo_ctrl_map_ptr_))[(CmdRepository760::CreateInstance()->set_protocol_version_cmd_id_ptr_)->GetCmdKey()]
+            .setStopFlag(true);
+    }
+
+    switch (protocol_version) {
+      case 0x0100:
+      case 0x0101:
+      case 0x0184:
+        if (decoder_packet_general_version_base_ptr_ == nullptr)
+          decoder_packet_general_version_base_ptr_ =
+              std::make_shared<DecoderPacketGeneralVersionBase<T_PointCloud, T_DataBlock, T_DataUnit>>(decoder_ptr_);
+        ret = decoder_packet_general_version_base_ptr_->decoderPacket(buf, size, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
+                                                                      point_cloud_algorithm_callback);
+        break;
+
+      default:
+        break;
+    }
+    return ret;
+  }
 };
 }  // namespace lidar
 }  // namespace vanjee

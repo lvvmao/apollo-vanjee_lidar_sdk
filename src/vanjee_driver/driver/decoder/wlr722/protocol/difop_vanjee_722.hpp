@@ -50,6 +50,7 @@ class DifopVanjee722 : public DifopBase {
  public:
   virtual void initGetDifoCtrlDataMapPtr();
   virtual void addItem2GetDifoCtrlDataMapPtr(const DeviceCtrl& device_ctrl);
+  virtual void addItem2GetDifoCtrlDataMapPtr(const LidarParameterInterface& lidar_parm);
 };
 
 void DifopVanjee722::initGetDifoCtrlDataMapPtr() {
@@ -105,6 +106,44 @@ void DifopVanjee722::addItem2GetDifoCtrlDataMapPtr(const DeviceCtrl& device_ctrl
         ((*getDifoCtrlData_map_ptr_))[cmd] = getDifoCtrlData_WorkModeSet;
       } else {
         ((*getDifoCtrlData_map_ptr_)).emplace(cmd, getDifoCtrlData_WorkModeSet);
+      }
+    }
+  }
+}
+
+void DifopVanjee722::addItem2GetDifoCtrlDataMapPtr(const LidarParameterInterface& lidar_parm) {
+  if (lidar_parm.cmd_id == 1) {
+    if (lidar_parm.cmd_type == 1) {
+      uint8_t work_mode = 0xff;
+      JsonParser parser(lidar_parm.data);
+      auto json_value = parser.parse();
+      if (auto obj = std::dynamic_pointer_cast<JsonObject>(json_value)) {
+        if (obj->has("work_mode")) {
+          auto result = std::dynamic_pointer_cast<JsonNumber>(obj->get("work_mode"));
+          if (result == nullptr || result->value() > 2) {
+            return;
+          }
+          work_mode = static_cast<uint8_t>(result->value());
+        }
+      }
+      if (work_mode > 2) {
+        return;
+      }
+      std::shared_ptr<Params_WorkModeSet722> params_WorkModeSet722 = std::shared_ptr<Params_WorkModeSet722>(new Params_WorkModeSet722());
+      params_WorkModeSet722->work_mode_ = work_mode;
+      GetDifoCtrlClass getDifoCtrlData_WorkModeSet(*(std::make_shared<Protocol_WorkModeSet722>(params_WorkModeSet722)->SetRequest()), false);
+
+      uint16_t cmd = CmdRepository722::CreateInstance()->sp_set_work_mode_->GetCmdKey();
+      auto it = (*(getDifoCtrlData_map_ptr_)).find(cmd);
+      if (it != (*getDifoCtrlData_map_ptr_).end()) {
+        ((*getDifoCtrlData_map_ptr_))[cmd] = getDifoCtrlData_WorkModeSet;
+      } else {
+        ((*getDifoCtrlData_map_ptr_)).emplace(cmd, getDifoCtrlData_WorkModeSet);
+      }
+    } else {
+      uint16_t cmd = CmdRepository722::CreateInstance()->sp_get_work_mode_->GetCmdKey();
+      if (((*getDifoCtrlData_map_ptr_))[cmd].getStopFlag()) {
+        ((*getDifoCtrlData_map_ptr_))[cmd].setStopFlag(false);
       }
     }
   }

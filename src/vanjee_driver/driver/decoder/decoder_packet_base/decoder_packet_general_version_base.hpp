@@ -197,7 +197,8 @@ class DecoderPacketGeneralVersionBase {
 
  public:
   DecoderPacketGeneralVersionBase(Decoder<T_PointCloud>* decoder_ptr) {
-    imu_params_get_ = std::make_shared<ImuParamGet>();
+    // imu_params_get_ = std::make_shared<ImuParamGet>();
+    imu_params_get_ = decoder_ptr->m_imu_params_get_;
     decoder_ptr_ = decoder_ptr;
     if (decoder_ptr_->param_.imu_enable == -1 || decoder_ptr_->param_.imu_enable == 0) {
       decoder_ptr_->point_cloud_ready_ = true;
@@ -210,7 +211,7 @@ class DecoderPacketGeneralVersionBase {
                              std::function<void(DataBlockAngleAndTimestampInfo&, T_DataBlock*)> update_angle_and_timestamp_info_callback,
                              std::function<void(T_DataUnit*, PointInfo&)> decoder_data_unit_callback,
                              std::function<void()> point_cloud_algorithm_callback) {
-    VanjeeLidarPointCloudPacketBaseHeader& vanjee_lidar_point_cloud_packet_base_header = *(VanjeeLidarPointCloudPacketBaseHeader*)buf;
+    // VanjeeLidarPointCloudPacketBaseHeader& vanjee_lidar_point_cloud_packet_base_header = *(VanjeeLidarPointCloudPacketBaseHeader*)buf;
     return decoderPointCloudPacketProtocolVersionV1_0(buf, size, update_angle_and_timestamp_info_callback, decoder_data_unit_callback,
                                                       point_cloud_algorithm_callback);
   }
@@ -235,7 +236,9 @@ class DecoderPacketGeneralVersionBase {
       pkt_ts = lidar_pkt_ts < 0 ? 0 : lidar_pkt_ts;
     }
 
-    functionalSafetyDecoder(buf, size, vanjee_lidar_point_cloud_packet_header);
+    if (decoder_ptr_->param_.device_ctrl_state_enable || decoder_ptr_->param_.send_lidar_param_enable) {
+      functionalSafetyDecoder(buf, size, vanjee_lidar_point_cloud_packet_header);
+    }
     if (decoder_ptr_->param_.imu_enable != -1) {
       sendImuData(buf, size, pkt_ts, lidar_pkt_ts, vanjee_lidar_point_cloud_packet_header);
       if (!decoder_ptr_->imu_ready_ && !decoder_ptr_->point_cloud_ready_) {
@@ -260,7 +263,12 @@ class DecoderPacketGeneralVersionBase {
         if (point_cloud_algorithm_callback != nullptr)
           point_cloud_algorithm_callback();
         transformPointCloud();
-        decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.row_channel_num_, decoder_ptr_->cloudTs());
+        if (vanjee_lidar_point_cloud_packet_header.data_block_info_.data_block_packet_type_ == 1 ||
+            vanjee_lidar_point_cloud_packet_header.data_block_info_.data_block_packet_type_ == 3) {
+          decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.row_channel_num_, decoder_ptr_->cloudTs());
+        } else {
+          decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.col_channel_num_, decoder_ptr_->cloudTs());
+        }
         ret = true;
       }
 
@@ -299,7 +307,12 @@ class DecoderPacketGeneralVersionBase {
         if (point_cloud_algorithm_callback != nullptr)
           point_cloud_algorithm_callback();
         transformPointCloud();
-        decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.row_channel_num_, decoder_ptr_->cloudTs());
+        if (vanjee_lidar_point_cloud_packet_header.data_block_info_.data_block_packet_type_ == 1 ||
+            vanjee_lidar_point_cloud_packet_header.data_block_info_.data_block_packet_type_ == 3) {
+          decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.row_channel_num_, decoder_ptr_->cloudTs());
+        } else {
+          decoder_ptr_->cb_split_frame_(vanjee_lidar_point_cloud_packet_header.col_channel_num_, decoder_ptr_->cloudTs());
+        }
         ret = true;
       }
 
@@ -320,7 +333,7 @@ class DecoderPacketGeneralVersionBase {
     bool ret = true;
     // 0：exclude cyber security info field；1：include cyber security info field,but data is invalidate;
     // 2:include cyber security info field ,and data is valid;
-    uint8_t cyber_security_flag = (vanjee_lidar_point_cloud_packet_header.info_flag_ >> 4) & 0x03;
+    // uint8_t cyber_security_flag = (vanjee_lidar_point_cloud_packet_header.info_flag_ >> 4) & 0x03;
     // 0：exclude check info field；1：include check info field,but data is invalidate;2：crc16;3：bcc;
     uint8_t check_flag = (vanjee_lidar_point_cloud_packet_header.info_flag_ >> 6) & 0x03;
 
@@ -378,7 +391,7 @@ class DecoderPacketGeneralVersionBase {
       }
       fault_detection_module_counter_ = functionSafetyInfo.fault_detection_module_counter_;
 
-      if (decoder_ptr_->param_.device_ctrl_state_enable && functionSafetyInfo.error_code_id_ != 0) {
+      if (functionSafetyInfo.error_code_id_ != 0) {
         decoder_ptr_->deviceStatePublish(id, lidar_state, lidar_state, first_point_ts_);
       }
     }
@@ -411,11 +424,15 @@ class DecoderPacketGeneralVersionBase {
       offset += sizeof(ImuDataInfo);
 
       ImuDataInfo& imuDataInfo = *(ImuDataInfo*)(buf + size - offset);
+      // uint16_t imu_publish_flag = (buf[60] | (buf[61] << 8));
+      // if (imu_publish_flag == 0) {
+      //   return;
+      // }
       double imu_timestamp = lidar_timestamp + (double)imuDataInfo.imu_data_timestamp_ * 1e-9;
       if (abs(imu_timestamp - pre_imu_timestamp_) > 1e-6) {
         decoder_ptr_->imu_ready_ = imu_params_get_->imuGet(imuDataInfo.imu_angle_voc_x_, imuDataInfo.imu_angle_voc_y_, imuDataInfo.imu_angle_voc_z_,
-                                           imuDataInfo.imu_linear_acce_x_, imuDataInfo.imu_linear_acce_y_, imuDataInfo.imu_linear_acce_z_,
-                                           imu_timestamp, -100.0, false, false, false, true, true);
+                                                           imuDataInfo.imu_linear_acce_x_, imuDataInfo.imu_linear_acce_y_,
+                                                           imuDataInfo.imu_linear_acce_z_, imu_timestamp, -100.0, false, false, false, true, true);
         if (decoder_ptr_->imu_ready_) {
           decoder_ptr_->imu_packet_->timestamp = timestamp + (double)imuDataInfo.imu_data_timestamp_ * 1e-9;
           decoder_ptr_->imu_packet_->angular_voc[0] = imu_params_get_->imu_result_stu_.x_angle;
@@ -528,7 +545,7 @@ class DecoderPacketGeneralVersionBase {
   }
 
   void transformPointCloud() {
-    for (int i = 0; i < decoder_ptr_->point_cloud_->points.size(); i++) {
+    for (uint32_t i = 0; i < decoder_ptr_->point_cloud_->points.size(); i++) {
       if (decoder_ptr_->point_cloud_->points[i].x == 0 && decoder_ptr_->point_cloud_->points[i].y == 0 &&
           decoder_ptr_->point_cloud_->points[i].z == 0) {
         if (!decoder_ptr_->param_.dense_points) {

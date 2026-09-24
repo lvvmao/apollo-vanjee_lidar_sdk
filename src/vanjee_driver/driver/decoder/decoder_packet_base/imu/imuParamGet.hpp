@@ -44,6 +44,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory>
 #include <numeric>
 #include <vector>
+#ifdef ENABLE_TRANSFORM
+#include <Eigen/Dense>
+#endif
 
 #include <vanjee_driver/driver/decoder/decoder_packet_base/imu/complementary_filter.hpp>
 #include <vanjee_driver/driver/driver_param.hpp>
